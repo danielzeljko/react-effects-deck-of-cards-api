@@ -16,49 +16,72 @@ const BASE_URL = "https://deckofcardsapi.com/api/deck";
         images: {…}, value: 'QUEEN', suit: 'CLUBS'}, ...],
       isLoading: false
     }
+
+    TODO:
+    - disable button to draw a card or shuffle if shuffling is in progress
+    - see if we could somehow reuse fetchCard() when reshuffling.
  */
 
 function App() {
 
   const [game, setGame] = useState({
-    data: null,
+    deckId: null,
+    cardsRemaining: null,
     isLoading: true
   });
 
-  const [card, setCard] = useState({})
+  const [card, setCard] = useState({});
 
-  // fetch game and cards
-  useEffect(function fetchCardAndSetCard() {
-    // const cards = () => {..}
-    // immediate invoked functions
+  useEffect(function fetchGame() {
+
     async function fetchDeckAndCard() {
       const deckResp = await axios.get(`${BASE_URL}/new/shuffle/?deck_count=1`);
-      const deck = deckResp.data;
-      const cardResp = await axios.get(`${BASE_URL}/${deck.deck_id}/draw/?count=52`);
-      const cards = cardResp.data.cards;
+      const deckId = deckResp.data.deck_id;
+      const cardResp = await axios.get(`${BASE_URL}/${deckId}/draw/?count=1`);
+      const card = cardResp.data.cards[0];
 
-      setGame({
-        data: cards,
+      setGame(prevState => ({
+        ...prevState,
+        deckId,
+        cardsRemaining:cardResp.data.remaining,
         isLoading: false
-      });
-      setCard(_.sample(cards))
+      }));
+      setCard(card);
     }
     fetchDeckAndCard();
   }, []);
 
-  /** Get a random card */
+  async function fetchCard(){
+    const resp = await axios.get(`${BASE_URL}/${game.deckId}/draw/?count=1`);
+    const card = resp.data.cards[0];
+    const remaining = resp.data.remaining;
+    setCard(card);
+    setGame(prevState=> ({
+      ...prevState,
+      cardsRemaining: remaining
+    }))
+  }
 
-  function pickAndReturnRandomCard(){
-    setCard(_.sample(game.data))
+  async function shuffleCards(){
+    const resp = await axios.get(`${BASE_URL}/${game.deckId}/shuffle/`);
+
+    setGame(prevState => ({
+      ...prevState,
+      cardsRemaining:resp.data.remaining
+    }))
+    const resp2 = await axios.get(`${BASE_URL}/${game.deckId}/draw/?count=1`);
+    const card = resp2.data.cards[0];
+    setCard(card);
   }
 
   return (
     <div className="App">
-      <button onClick={pickAndReturnRandomCard}>Gimmie a card!</button>
-
+      <button onClick={fetchCard}>Gimmie a card!</button>
+      <button onClick={shuffleCards}>Return cards and Shuffle deck</button>
       <div className="App-card">
-        {card.isLoading && <p>Loading...</p>}
-        {!card.isLoading && <img src={card.image} />}
+        {game.isLoading && <p>Loading...</p>}
+        {!game.isLoading && game.cardsRemaining > 0 && <img src={card.image} />}
+        {!game.isLoading && game.cardsRemaining === 0 && <p>Out of cards</p>}
       </div>
     </div>
   );
